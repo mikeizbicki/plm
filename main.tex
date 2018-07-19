@@ -1,0 +1,442 @@
+\documentclass{article}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{rotating}
+\usepackage{xcolor}
+
+\usepackage[inline]{enumitem}
+\setlist[description]{topsep=0.1cm,itemsep=0.1cm,style=unboxed,leftmargin=0cm,listparindent=\parindent}
+
+%\usepackage{algorithm}
+%\usepackage[noend]{algpseudocode}
+%\usepackage{algorithmicx}
+%\usepackage{algorithm2e}
+
+\usepackage[round]{natbib}   % omit 'round' option if you prefer square brackets
+\bibliographystyle{plainnat}
+
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks   = true, %Colours links instead of ugly boxes
+  urlcolor     = blue, %Colour for external hyperlinks
+  linkcolor    = blue, %Colour of internal links
+  citecolor    = blue  %Colour of citations
+}
+
+\usepackage{tikz}
+\usetikzlibrary{matrix, positioning, fit}
+\usepackage{pgfplots}
+\pgfplotsset{width=7cm,compat=1.8}
+\definecolor{darkgreen}{RGB}{0,127,0}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newtheorem{corollary}{Corollary}
+\newtheorem{theorem}{Theorem}
+\newtheorem{example}{Example}
+\newtheorem{lemma}{Lemma}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\vecspan}{span}
+\DeclareMathOperator*{\affspan}{aff}
+\DeclareMathOperator*{\subG}{subG}
+\DeclareMathOperator*{\tr}{tr}
+\DeclareMathOperator*{\E}{\mathbb{E}}
+
+\newcommand{\str}[1]{\texttt{#1}}
+\newcommand{\defn}[1]{\textit{#1}}
+
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\trans}[1]{{#1}^{\top}}
+
+\newcommand{\abs}[1]{\lvert{#1}\rvert}
+\newcommand{\ltwo}[1]{\lVert {#1} \rVert_2}
+\newcommand{\set}{\mathcal}
+\renewcommand{\vec}{\mathbf}
+
+\newcommand{\W}{\mathcal{W}}
+\newcommand{\X}{\mathcal{X}}
+\newcommand{\Y}{\mathcal{Y}}
+\newcommand{\F}{\mathcal{F}}
+\newcommand{\D}{\mathcal{D}}
+
+\newcommand{\w}{\mathbf w}
+\newcommand{\what}{\hat\w}
+\newcommand{\wnn}{W}
+\newcommand{\x}{\mathbf{x}}
+\newcommand{\y}{y}
+
+\newcommand{\f}{f}
+\newcommand{\fstar}{\f^*}
+\newcommand{\fhat}{{\hat\f}}
+\newcommand{\fnn}{{\fhat^\textit{NN}}}
+
+\newcommand{\act}{\sigma}
+\newcommand{\relu}{\act_R}
+
+\newcommand{\dist}{d}
+\newcommand{\Dist}{\mathcal D}
+\newcommand{\kernel}{k}
+\newcommand{\loc}{_{\textit{loc}}}
+\newcommand{\gmap}{_{\textit{gmap}}}
+\newcommand{\gcirc}{_\textit{gcirc}}
+
+\newcommand{\loss}{\ell}
+\newcommand{\reg}{r}
+
+%\newcommand{\prob}[1]{\text{Pr}\left({#1}\right)}
+\newcommand{\prob}[1]{p\!\left({#1}\right)}
+\newcommand{\cprob}[2]{\prob{{#1} | {#2}}}
+\newcommand{\normal}[2]{\mathcal{N}({#1},{#2})}
+\newcommand{\eye}{I}
+
+%\newcommand{\plots}[1]{}
+\newcommand{\plots}[1]{#1}
+\newcommand{\ignore}[1]{}
+\newcommand{\fixme}[1]{\textcolor{red}{\textbf{FIXME:} {#1}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\fplm}{\fhat^{\textit{PLM}}}
+\newcommand{\fplmconvex}{\fhat^{\stackrel\smile{\textit{PLM}}}}
+\newcommand{\fplmconcave}{\fhat^{\stackrel\frown{\textit{PLM}}}}
+\newcommand{\wconvex}{{\stackrel\smile\w}}
+\newcommand{\wconcave}{{\stackrel\frown\w}}
+\newcommand{\mconvex}{{\stackrel\smile m}}
+\newcommand{\mconcave}{{\stackrel\frown m}}
+\newcommand{\posp}[1]{{#1}^+}
+\newcommand{\negp}[1]{{#1}^-}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title{Faster RELU Networks}
+\author{Mike Izbicki}
+
+\begin{document}
+
+\maketitle
+%\begin{abstract}
+%\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Problem} 
+
+Let $\fstar : \R^{d} \to \R^{p}$ be an arbitrary function.
+Our goal is to select a function $\fhat$ from a hypothesis class $\F$ that well approximates $\fstar$.
+%In the standard machine learning setting, we are given a function class $\F$, 
+%and $\fstar$ is defined as
+%\begin{equation}
+    %\fstar = \argmin_{\f\in\F} \E_{\x\in\D} \loss_\x(\f(\x)),
+%\end{equation}
+%where $\D$ is an unknown distribution and $\loss_\x$ is a loss function.
+%While this is a useful example to keep in mind,
+%we do not require that $\fstar$ have this form.
+
+In this note, we consider the standard class of RELU neural networks and a new class of functions called piecewise linear machines (PLMs).
+The key idea of PLMs is that they replace the matrix-vector products of neural networks with a combination of vector-vector products and nearest neighbor queries.
+This makes PLMs potentially much faster than RELU networks,
+able to be evaluated quickly on the CPU instead of just the GPU,
+and able to represent more functions than RELU networks.
+In some cases, RELU networks represent functions using fewer trainable parameters than PLMs,
+and in other cases PLMs represent the same function with fewer parameters than RELU networks.
+So experiments are needed to determine which representation will be better in practice,
+and a hybrid approach has the potential to get the best of both methods.
+%We show that each layer of a PLM is strictly more powerful than an equivalent layer of RELU,
+%and that PLMs can use nearest neighbor techniques to speed up the computation.
+%This faster computation may fast enable deep learning on CPUs instead of just GPUs.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{RELU neural networks}
+
+A \defn{neural network} (NN) with 1 hidden layer is a function $\fnn : \R^d \to \R^p$ of the form
+\begin{equation}
+    \fnn(\x) = \wnn_1\sigma(\wnn_0\x), 
+    \label{eq:nn}
+\end{equation}
+where $\wnn_1 : \R^{p\times w}$ and $\wnn_0 : \R^{w\times d}$ are matrices representing the parameters of the neural network,
+$w$ is an integer called the width of the network,
+and
+\begin{equation}
+    \sigma(a) = \max\{0,a\}
+\end{equation}
+is the RELU activation function applied componentwise to the $\wnn_0\x$ vector.
+Deep RELU networks are constructed by iteratively repeating this construction,
+but for simplicity we will only consider networks with 1 hidden layer here.
+
+The RELU network is clearly a piecewise linear function.
+In this note, we consider alternative representations of piecewise linear functions that have both computational and representational advantages.
+To make these comparisons, we need the following two easy lemmas.
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{lemma}
+The runtime of evaluating $\fnn(\x)$ is $O(wd+wp)$.
+\label{lem:nn:time}
+\end{lemma}
+\begin{proof}
+The runtime is dominated by the matrix multiplications.
+The rightmost multiplication $\wnn_0\x$ is the multiplication of a $w\times d$ matrix by a $d\times1$ vector, which takes time $O(wd)$.
+The leftmost multiplication involving $\wnn_1$ is a multiplication of a $p\times w$ matrix by a $\w\times1$ vector, which takes time $O(wp)$.
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{lemma}
+The function $\fnn$ is a piecewise linear function with at most $O(2^d+dw)$ linear regions.
+\label{lem:nn:pieces}
+\end{lemma}
+\begin{proof}[Informal proof]
+Let $\wnn_0^i$ denote the $i$th row of $\wnn_0$.
+Observe that for each $\wnn_0^i$, 
+the function $\max\{0,\wnn_0^i\}$ splits the input space into two linear regions,
+and the boundary separating these regions is a $d-1$ dimensional hyperplane.
+The first $d$ of these hyperplanes intersect create $2^d$ regions.
+The next $w-d$ of these hyperplanes create $(d+1)(w-d)$ regions.
+\end{proof}
+
+\ignore{
+A \defn{neural network} (NN) is a function $\fnn_i : \R^{d_i} \to \R^{d_{i-1}}$ defined recursively as
+\begin{align}
+    %\fnn_i &: \R^{d_i} \to \R^{d_{i-1}} \\
+    \fnn_i(\x) &=
+    \begin{cases}
+        \wnn_0\x & \text{if}~i = 0 \\
+        \wnn_i\act_i(\f_{i-1}(\x)) & \text{otherwise}
+    \end{cases}
+    \label{eq:nn}
+\end{align}
+where $\wnn_i$ is a ${d_{i}\times d_{i-1}}$ parameter matrix and $\act_i$ is a non-linear activation function.
+We consider the particular case where the $\act_i$ are equal to the RELU activation function
+\begin{equation}
+    \relu(a) = \max\{0,a\}
+\end{equation}
+or max pooling.
+When approximating the function $\fstar$ by a $q$-layer neural network $\fnn_q$,
+we must have that $d=d_0$ and $p=d_q$.
+
+The runtime of evaluating a neural network is dominated by the matrix multiplications.
+At layer $i$, we multiply a $d_i\times d_{i-1}$ matrix by a $d_{i-1}\times 1$ vector.
+This takes time $O(d_id_{i-1})$.
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The piecewise linear machine}
+
+The \defn{piecewise linear machine} (PLM) is an alternative representation of piecewise continuous functions.
+We shall see that it has better representation ability than RELU networks and is potentially exponentially faster to evaluate.
+
+Formally, A PLM is a function $\fplm : \R^d \to \R^p$ where each of the $p$ outputs has the form
+\begin{equation}
+    \fplm(\x) 
+    = \fplmconvex(\x) + \fplmconcave(\x)
+    ,
+\end{equation}
+where $\fplmconvex$ and $\fplmconcave$ are convex and concave piecewise linear functions of the form
+\begin{align}
+    \fplmconvex(\x) = \max\{\trans\wconvex_i\x\}_{i=1}^\mconvex, ~~~~~
+    \fplmconcave(\x) = \min\{\trans\wconcave_i\x\}_{i=1}^\mconcave,
+\end{align}
+where the integers $\mconvex$ and $\mconcave$ define the number of linear regions of $\fplmconvex$ and $\fplmconcave$ respectively,
+and $\wconvex_i,\wconcave_i : \R^d$ are the function's parameters.
+Each $\wconvex_i$ and $\wconcave_i$ defines a different linear region of $\fplmconvex$ and $\fplmconcave$.
+The function $\fplmconvex$ is convex because the max of linear functions is convex,
+and the function $\fplmconcave$ is concave because the min of linear functions is concave.
+As with neural networks, deep PLMs can be created by iterating this construction,
+but we focus here only on an individual layer.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Representational capacity}
+
+The results in this section show that any RELU network can be exactly represented as a PLM,
+but that not all PLMs can be exactly represented as RELU networks.
+This implies that PLMs are in some sense a more powerful class of functions.
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{theorem}
+For every neural network of width $w$ and input dimension $d$, 
+there exists an equivalent PLM with $\mconvex,\mconcave \le O(2^d+dw)$.
+\label{thm:plm:nn}
+\end{theorem}
+\begin{proof}
+We can decompose the neural network equation \eqref{eq:nn} into a sum of convex and concave functions as
+\begin{equation}
+    \fnn(\x) = \posp\wnn_1\sigma(\wnn_0\x) - \negp\wnn_1\sigma(\wnn_0\x),
+\end{equation}
+where $\posp\wnn_1$ and $\negp\wnn_1$ represent the positive and negative components of $\wnn_1$.
+Each of these functions has at most $O(2^d+dw)$ pieces by the same reasoning as Lemma \ref{lem:nn:pieces}.
+The values of $\mconvex$ and $\mconcave$ represent the number of linear pieces of the PLM,
+and so are bounded above by $O(2^d+dw)$.
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{corollary}[Informal]
+PLMs can approximate any continuous function with arbitrary accuracy.
+\end{corollary}
+\begin{proof}[Informal proof]
+This follows from the fact that any continuous function can be approximated by a RELU network,
+and every RELU network can be exactly represented by a PLM.
+Another way to prove this is to observe that every continuous function can be approximated by the sum of a convex and concave function,
+and that any convex/concave function can be approximated by a piecewise linear function.
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{theorem}
+There exist convex functions that can be exactly represented as PLMs
+but cannot be exactly represented by any neural network.
+\label{thm:plm:max3}
+\end{theorem}
+\begin{proof}
+Consider the function $\fstar : \R^2 \to \R$ defined to be
+\begin{align}
+    %\fstar(\x) = \max\{\trans{(0,0)}\w,\trans{(0,1)}\w,\trans{(1,0)}\w\}.
+    \fstar(\x) = \max\{\trans\w_i\x\}_{i=1}^3,
+\end{align}
+where $\w_1=(0,0)$, $\w_2=(1,0)$, and $\w_3=(0,1)$.
+The function $\fstar$ is clearly convex and a PLM.
+The function has three linear regions, all of which intersect at the point $(0,0)$.
+In a neural network, however, any point on the boundary of a region must intersect an even number of regions.
+This is because each region is defined by intersecting hyperplanes,
+and the intersection of hyperplanes must define an even number of regions.
+Therefore, the function $\fstar$ cannot be rewritten as a neural network.
+
+\fixme{How many parameters does a RELU network need to approximate this function to within $\epsilon$ accuracy under some norm?}
+\citet{hanin2017universal} shows that $\fstar$ can be exactly represented when the input space is restricted to be $[0,1]^d$ instead of $\R^d$.
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Runtime}
+
+This section shows that evaluating PLMs can be significantly faster than evaluating RELU networks.
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{theorem}
+The function $\fplm$ can be evaluated in time $O(p2^d\log(\mconvex+\mconcave))$.
+\label{thm:nn:time}
+\end{theorem}
+\begin{proof}
+There is no need to evaluate all $\mconvex+\mconcave$ inner products to compute $\fplm$,
+as only two of these inner products actually contribute to the final answer.
+Tree data structures can be used to directly find these $\wconvex_i$ and $\wconcave_i$ \citep{ram2012maximum,curtin2014dual}.
+These tree data structures work well heuristically in practice, 
+but they do not offer any worst case guarantees.
+To get guarantees, we can transform the maximum inner product search into a standard nearest neighbor search in constant time \citep{bachrach2014speeding}.
+Then, using standard nearest neighbor techniques, 
+we can evaluate the PLM in time $O(2^d\log(\max\{\mconvex,\mconcave\}))$.
+This process must be repeated once for each dimension $p$ in the output.
+\end{proof}
+
+Approximate nearest neighbor search may also prove useful for faster evaluation.
+It's not immediately clear how the approximate nearest neighbor search would translate into accuracy of the function evaluation,
+but this seems like a simple error to quantify.
+
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{theorem}
+Any RELU network can be evaluated in time $O(p2^d\log(2^d+dw))$ when represented as a PLM.
+When $w>\!\!>d$, this represents a time savings over the $O(wd+wp)$ from Lemma \ref{lem:nn:time}.
+\label{thm:plm:time:relu}
+\end{theorem}
+\begin{proof}
+By Theorem \label{thm:plm:nn}, the PLM will have $\mconvex=\mconcave=O(2^d+dw)$. 
+By Theorem \label{thm:plm:time}, the runtime of evaluation is $O(p2^d\log(\mconvex+\mconcave)).$
+Substituting gives the stated result.
+\end{proof}
+
+The runtimes in Theorem \ref{thm:plm:time:relu} are not great for two reasons.
+First, the reduction from RELU networks to PLMs requires too much memory to be implementable directly.
+Specifically, $O(d2^d+d^2w)$ memory is required as all $O(2^d+dw)$ hyperplanes must be stored explicitly, 
+and each one requires $O(d)$ memory.
+Second, the runtimes are exponential in the input dimension $d$.
+Typical deep learning scenarios have much to large of an input dimension for this to work.
+
+%A dimensionality reduction technique could be used to reduce the total number of RELU components that get stored explicitly.
+There are three possible ways to fix these problems:
+First, Theorem \ref{thm:plm:max3} suggests that PLMs may require significantly fewer hyperplanes to represent a function than RELU networks.
+In this case, not all of the RELU components would need to be maintained.
+Second, a dimensionality reduction technique can be used to reduce the number of RELU components in a principled manner.
+Third, hybrid neural network/PLMs could be used where the neural network represents the exponential portion of the number of linear pieces, 
+and the PLM represents the polynomial portion.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Learning PLMs}
+
+The task of learning a single PLM layer falls under the study of \defn{difference of convex} (DC) programming.
+DC programming has seen relatively little use in the machine learning literature.
+Examples include reinforcement learning \citep{piot2014difference}, 
+probabilistic logic programming \citep{bach2015hinge},
+and for solving RBMs \citep{upadhya2017learning}. 
+
+Outside of the machine learning literature, however, it has seen a lot of use in operations research \citep[e.g.][]{tao1997convex,tao2005dc,le2012exact,dinh2014recent,le2015dc,ciripoi2017vector}.
+I don't believe the specific scenario of optimizing a PLM layer has been previously considered, however.
+The closest work assumes that:
+only one of the convex/concave functions is piecewise linear,
+does not take advantage of using trees to speed up the maximum inner product search,
+and does not consider "deep" DC problems.
+
+Another related line of research is the approximation of convex/concave functions by piecewise linear functions. 
+In the one dimensional case, the optimal piecewise linear function can be computed exactly \citep{gavrilovic1975optimal}.
+In the multivariate case, the situation is harder.
+When the value of $\mconcave=1$, 
+then the problem reduces to an ordinary regression problem that can be easily solved;
+when the value of $\mconcave$ is unbounded,
+then the problem reduces to a quadratic programming problem \citep[][Section 6.5.5]{boyd2004convex};
+when the value of $\mconvex$ is fixed,
+\citet{magnani2009convex,hannah2013multivariate,balazs2015near,balazs2016max} provide algorithms for fitting.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\section{Results}
+
+%RELU neural networks have the unique property that they are continuous piecewise linear approximations of the true function $\fstar$.
+%We will exploit this property to reparameterize the neural network into a more computationally efficient form.
+%
+%For each layer $i>0$, we can rewrite \eqref{eq:nn} as
+%\newcommand{\ghat}{{\mathbf {\hat g}}}
+%\begin{align}
+    %\ghat_i
+    %&= \w_i\relu(\ghat_{i-1}) \\
+    %&= \w_i\max\{0,\ghat_{i-1}\} \\
+    %&= \w_i\max\{\posp\ghat_{i-1},\negp\ghat_{i-1}\} 
+     %- \w_i \negp\ghat_{i-1}\\
+    %&= \posp{\w_i}\max\{\posp\ghat_{i-1},\negp\ghat_{i-1}\} 
+     %- \negp{\w_i}\max\{\posp\ghat_{i-1},\negp\ghat_{i-1}\} 
+     %- \w_i \negp\ghat_{i-1}\\
+    %%&= \max\{\posp{\w_i}\posp\ghat_{i-1},\posp{\w_i}\negp\ghat_{i-1}\} 
+     %%- \max\{\negp{\w_i}\posp\ghat_{i-1},\negp{\w_i}\negp\ghat_{i-1}\} 
+     %%- \w_i \negp\ghat_{i-1}
+    %.
+%\end{align}
+%Unravelling the recursion, we get
+%\begin{align}
+%\end{align}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\clearpage
+%\section{Reference Notes}
+%
+%\citet{wang2013secure} introduces the $\hat R$-tree,
+%which uses an encrypted form of the inner product for nearest neighbor queries.
+%Can a similar technique be used for MIPS?
+
+\bibliography{main}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\end{document}
