@@ -118,7 +118,7 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\title{Faster RELU Networks}
+\title{Notes on PLMs}
 \author{Mike Izbicki}
 
 \begin{document}
@@ -157,7 +157,7 @@ and a hybrid approach has the potential to get the best of both methods.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{RELU neural networks}
 
-A \defn{neural network} (NN) with 1 hidden layer is a function $\fnn : \R^d \to \R^p$ of the form
+A RELU network with 1 hidden layer is a function $\fnn : \R^d \to \R^p$ of the form
 \begin{equation}
     \fnn(\x) = \wnn_1\sigma(\wnn_0\x), 
     \label{eq:nn}
@@ -203,30 +203,34 @@ The first $d$ of these hyperplanes intersect create $2^d$ regions.
 The next $w-d$ of these hyperplanes create $(d+1)(w-d)$ regions.
 \end{proof}
 
-\ignore{
-A \defn{neural network} (NN) is a function $\fnn_i : \R^{d_i} \to \R^{d_{i-1}}$ defined recursively as
-\begin{align}
-    %\fnn_i &: \R^{d_i} \to \R^{d_{i-1}} \\
-    \fnn_i(\x) &=
-    \begin{cases}
-        \wnn_0\x & \text{if}~i = 0 \\
-        \wnn_i\act_i(\f_{i-1}(\x)) & \text{otherwise}
-    \end{cases}
-    \label{eq:nn}
-\end{align}
-where $\wnn_i$ is a ${d_{i}\times d_{i-1}}$ parameter matrix and $\act_i$ is a non-linear activation function.
-We consider the particular case where the $\act_i$ are equal to the RELU activation function
-\begin{equation}
-    \relu(a) = \max\{0,a\}
-\end{equation}
-or max pooling.
-When approximating the function $\fstar$ by a $q$-layer neural network $\fnn_q$,
-we must have that $d=d_0$ and $p=d_q$.
+\citet{chen2016knots,chen2016empirical,chen2016upper} claims that in randomly initialized neural nets,
+the number of linear pieces (which they call knots) is linear in the number of neurons.
+They only consider the case of dimension 1 though, so the result seems trivial.
 
-The runtime of evaluating a neural network is dominated by the matrix multiplications.
-At layer $i$, we multiply a $d_i\times d_{i-1}$ matrix by a $d_{i-1}\times 1$ vector.
-This takes time $O(d_id_{i-1})$.
-}
+%%%%%%%%%%%%%%%%%%%%
+
+%A \defn{neural network} (NN) is a function $\fnn_i : \R^{d_i} \to \R^{d_{i-1}}$ defined recursively as
+%\begin{align}
+    %%\fnn_i &: \R^{d_i} \to \R^{d_{i-1}} \\
+    %\fnn_i(\x) &=
+    %\begin{cases}
+        %\wnn_0\x & \text{if}~i = 0 \\
+        %\wnn_i\act_i(\f_{i-1}(\x)) & \text{otherwise}
+    %\end{cases}
+    %\label{eq:nn}
+%\end{align}
+%where $\wnn_i$ is a ${d_{i}\times d_{i-1}}$ parameter matrix and $\act_i$ is a non-linear activation function.
+%We consider the particular case where the $\act_i$ are equal to the RELU activation function
+%\begin{equation}
+    %\relu(a) = \max\{0,a\}
+%\end{equation}
+%or max pooling.
+%When approximating the function $\fstar$ by a $q$-layer neural network $\fnn_q$,
+%we must have that $d=d_0$ and $p=d_q$.
+%
+%The runtime of evaluating a neural network is dominated by the matrix multiplications.
+%At layer $i$, we multiply a $d_i\times d_{i-1}$ matrix by a $d_{i-1}\times 1$ vector.
+%This takes time $O(d_id_{i-1})$.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{The piecewise linear machine}
@@ -285,10 +289,14 @@ and so are bounded above by $O(2^d+dw)$.
 PLMs can approximate any continuous function with arbitrary accuracy.
 \end{corollary}
 \begin{proof}[Informal proof]
-This follows from the fact that any continuous function can be approximated by a RELU network,
-and every RELU network can be exactly represented by a PLM.
-Another way to prove this is to observe that every continuous function can be approximated by the sum of a convex and concave function,
-and that any convex/concave function can be approximated by a piecewise linear function.
+This follows from two facts.
+(1) Any continuous function can be approximated by a RELU network \citep{mhaskar1992approximation,leshno1992multilayer,pinkus1999approximation}.
+A key feature of all of these results is the region of approximation must be a compact subset of $\R^d$.
+(2) Every RELU network can be exactly represented by a PLM.
+
+We can prove this without requiring a compact domain if we make assumptions about the lipschitzness of $\fstar$.
+In particular, observe that every continuous function can be approximated by the sum of a convex and concave function,
+and that any lipschitz convex/concave function can be approximated by a piecewise linear function.
 \end{proof}
 
 %%%%%%%%%%%%%%%%%%%%
@@ -314,6 +322,8 @@ Therefore, the function $\fstar$ cannot be rewritten as a neural network.
 
 \fixme{How many parameters does a RELU network need to approximate this function to within $\epsilon$ accuracy under some norm?}
 \citet{hanin2017universal} shows that $\fstar$ can be exactly represented when the input space is restricted to be $[0,1]^d$ instead of $\R^d$.
+To approximate this simple convex function over a compact domain,
+RELU networks require both convex and concave components.
 \end{proof}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
